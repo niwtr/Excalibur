@@ -6,13 +6,17 @@
      ,@body))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun flatten(x)
-    "flatten the list"
+  (defun flatten (x)
     (labels ((rec (x acc)
                (cond ((null x) acc)
+                     #+(and sbcl (not old-sbcl))
+                     ((typep x 'sb-impl::comma) (rec (sb-impl::comma-expr x) acc))
                      ((atom x) (cons x acc))
-                     (t (rec (car x) (rec (cdr x) acc))))))
-      (rec x nil))))
+                     (t (rec
+                         (car x)
+                         (rec (cdr x) acc))))))
+      (rec x nil)))
+  )
 
 (defun prune (test tree)
   "kill that leave of the tree that satisfies the pred."
@@ -37,8 +41,8 @@
   `(if ,pred
        (lambda ,var  ,then)
        ,(progn
-         (if else
-             `(lambda ,var ,else) nil))))
+          (if else
+              `(lambda ,var ,else) nil))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun map-a->b (a b &key
@@ -49,20 +53,20 @@
                              (= step 1)
                              (funcall step-fn x)
                              (+ x step)))
-      (do ((i a (funcall next-fn i))
-           (result nil))
-          ((> i b) (nreverse result))
-        (push (funcall elem-fn i) result)))))
+          (do ((i a (funcall next-fn i))
+               (result nil))
+              ((> i b) (nreverse result))
+            (push (funcall elem-fn i) result)))))
 
 #|
 ;;run these code to see how reader macro save the time.
 (defun iter1000 (fn)
   (lett (lst '#.(map-0->n 1000))
-    (mapcar fn lst)))
+        (mapcar fn lst)))
 
 (defun iter1000s (fn)
   (lett (lst (map-0->n 1000))
-    (mapcar fn lst)))
+        (mapcar fn lst)))
 
 (defun test ()
   (princ (time (loop for i from 1 to 100000 do (iter1000 #'1+)))) (terpri)
@@ -237,29 +241,29 @@
 (defmacro defun/memo (funname (&rest var) &body body)
   "define a function that does memoization."
   (with-gensym-walker
-    `(let ((g!memo (make-hash-table :test #'equal)))
-       (defun ,funname ,var
-         (labels ((g!fun ,var ,@body))
-           (multiple-value-bind (g!res g!win)
-               (gethash (list ,@var) g!memo)
-             (if g!win g!res
-                 (let ((g!the-res (funcall #'g!fun ,@var)))
-                   (setf (gethash (list ,@var) g!memo) g!the-res)
-                   g!the-res))))))))
+      `(let ((g!memo (make-hash-table :test #'equal)))
+         (defun ,funname ,var
+           (labels ((g!fun ,var ,@body))
+             (multiple-value-bind (g!res g!win)
+                 (gethash (list ,@var) g!memo)
+               (if g!win g!res
+                   (let ((g!the-res (funcall #'g!fun ,@var)))
+                     (setf (gethash (list ,@var) g!memo) g!the-res)
+                     g!the-res))))))))
 
 
 
 (defmacro lambda/memo ((&rest var) &body body)
   (with-gensym-walker
-    `(let ((g!memo (make-hash-table :test #'equal)))
-       (lambda ,var
-         (labels ((g!fun ,var ,@body))
-           (multiple-value-bind (g!res g!win)
-               (gethash (list ,@var) g!memo)
-             (if g!win g!res
-                 (let ((g!the-res (funcall #'g!fun ,@var)))
-                   (setf (gethash (list ,@var) g!memo) g!the-res)
-                   g!the-res))))))))
+      `(let ((g!memo (make-hash-table :test #'equal)))
+         (lambda ,var
+           (labels ((g!fun ,var ,@body))
+             (multiple-value-bind (g!res g!win)
+                 (gethash (list ,@var) g!memo)
+               (if g!win g!res
+                   (let ((g!the-res (funcall #'g!fun ,@var)))
+                     (setf (gethash (list ,@var) g!memo) g!the-res)
+                     g!the-res))))))))
 
 
 
@@ -374,7 +378,7 @@
                                           (if (find ag same-argl)
                                               (lett (g (gensym
                                                         (symbol-name ag)))
-                                                (push (cons ag g) arg-binding) g)
+                                                    (push (cons ag g) arg-binding) g)
                                               ag))))
                (cond ((eq symb 'quote) body)
                      ((eq symb 'defun)
@@ -403,7 +407,7 @@
                      (t
                       (cons
                        (lett (win (assoc symb arg-binding))
-                         (if win (cdr win) symb))
+                             (if win (cdr win) symb))
                        (arg-walker (cdr body) arg-binding context)))))))))
   ;;end of eval-when
   )
@@ -450,10 +454,10 @@
 #+obselete
 (defmacro lambda/d ((&rest argl) &body body)
   (with-gensym-walker
-    `(lambda (g!arg-name)
-       (destructuring-bind ,@argl
-           g!arg-name
-         ,@body))))
+      `(lambda (g!arg-name)
+         (destructuring-bind ,@argl
+             g!arg-name
+           ,@body))))
 
 
 
@@ -470,8 +474,8 @@
         (with-deconstruction
             (labels ((bar ((z . y)) (- x y z)))
               (with-deconstruction
-                    (lambda ((x)) (princ x)))
-                    (bar (cons (funcall (lambda (x) (+ x 1)) x) y)))))))
+                  (lambda ((x)) (princ x)))
+              (bar (cons (funcall (lambda (x) (+ x 1)) x) y)))))))
 
 ;; would not provide cliche when not in need.
 (with-deconstruction
@@ -503,10 +507,10 @@
   (let ((reduced (remove-duplicates data :key key :test test)))
     (car
      (reduce (lambda/d ((x . xn) (y . yn))
-            (if (> xn yn) (cons x xn) (cons y yn)))
-      (mapcar (lambda (thing)
-                (cons thing (count thing data :key key :test test)))
-              reduced)))))
+                       (if (> xn yn) (cons x xn) (cons y yn)))
+             (mapcar (lambda (thing)
+                       (cons thing (count thing data :key key :test test)))
+                     reduced)))))
 |#
 
 (defun most (fn lst)
@@ -516,9 +520,9 @@
              (max (funcall fn wins)))
         (dolist (obj (car lst))
           (lett (score (funcall fn obj))
-            (when (> score max)
-              (setq wins obj
-                    max score))))
+                (when (> score max)
+                  (setq wins obj
+                        max score))))
         (values wins max))))
 
 (defun mosts (fn lst)
@@ -528,11 +532,11 @@
             (max (funcall fn (car lst))))
         (dolist (obj (cdr lst))
           (lett (score (funcall fn obj))
-            (cond ((> score max)
-                   (setq max score
-                         rst (list obj)))
-                  ((= score max)
-                   (push obj rst)))))
+                (cond ((> score max)
+                       (setq max score
+                             rst (list obj)))
+                      ((= score max)
+                       (push obj rst)))))
         (values (nreverse rst) max))))
 
 
@@ -541,10 +545,10 @@
   (if (null lst)
       nil
       (lett (wins (car lst))
-        (dolist (obj (cdr lst))
-          (if (funcall fn obj wins)
-              (setq wins obj)))
-        wins)))
+            (dolist (obj (cdr lst))
+              (if (funcall fn obj wins)
+                  (setq wins obj)))
+            wins)))
 
 
 
@@ -561,7 +565,7 @@
    (apply #'concatenate 'string
           (mapcar (lambda (str)
                     (string-upcase str))
-                 (remove nil strs)))))
+                  (remove nil strs)))))
 
 
 
@@ -592,16 +596,108 @@
         (dolist (x lst)
           (lett (val (funcall fn x))
                 (if val (push val acc))))
-          (nreverse acc)))
+        (nreverse acc)))
 
 (defun group (source n)
   (if (zerop n) (error "Zero length! -- group"))
   (labels ((rec (source acc)
              (lett (rest (nthcdr n source))
-               (if (consp rest)
-                   (rec rest (cons (subseq source 0 n) acc))
-                   (nreverse (cons source acc))))))
+                   (if (consp rest)
+                       (rec rest (cons (subseq source 0 n) acc))
+                       (nreverse (cons source acc))))))
     (if source (rec source nil) nil)))
 
 
 
+;;;;code borrowed from let-over-lambda
+
+#+sbcl
+(eval-when (:compile-toplevel :execute)
+  (handler-case
+      (progn
+        (sb-ext:assert-version->= 1 2 2)
+        (setq *features* (remove 'old-sbcl *features*)))
+    (error ()
+      (pushnew 'old-sbcl *features*))))
+
+
+
+(eval-when (:compile-toplevel :execute :load-toplevel)
+  (defun flatten (x)
+    (labels ((rec (x acc)
+               (cond ((null x) acc)
+                     #+(and sbcl (not old-sbcl))
+                     ((typep x 'sb-impl::comma) (rec (sb-impl::comma-expr x) acc))
+                     ((atom x) (cons x acc))
+                     (t (rec
+                         (car x)
+                         (rec (cdr x) acc))))))
+      (rec x nil)))
+  (defun g!-symbol-p (s)
+    (and (symbolp s)
+         (> (length (symbol-name s)) 2)
+         (string= (symbol-name s)
+                  "G!"
+                  :start1 0
+                  :end1 2)))
+
+  (defun o!-symbol-p (s)
+    (and (symbolp s)
+         (> (length (symbol-name s)) 2)
+         (string= (symbol-name s)
+                  "O!"
+                  :start1 0
+                  :end1 2)))
+
+  (defun o!-symbol-to-g!-symbol (s)
+    (symb "G!"
+          (subseq (symbol-name s) 2))))
+
+(defmacro defmacro/g! (name args &rest body)
+  (let* ((syms (remove-duplicates
+                (remove-if-not #'g!-symbol-p
+                               (flatten body))))
+         (docstring (if (stringp (car body))
+                        (car body)
+                        nil))
+         (body (if (stringp docstring)
+                   (cdr body)
+                   body)))
+    `(defmacro ,name ,args
+       ,docstring
+       (let ,(mapcar
+              (lambda (s)
+                `(,s (gensym ,(subseq
+                               (symbol-name s)
+                               2))))
+              syms)
+         ,@body))))
+
+(defmacro defmacro! (name args &rest body)
+  (let* ((os (remove-if-not #'o!-symbol-p (flatten args)))
+         (gs (mapcar #'o!-symbol-to-g!-symbol os))
+         (docstring (if (stringp (car body))
+                        (car body)
+                        nil))
+         (body (if (stringp docstring)
+                   (cdr body)
+                   body)))
+    `(defmacro/g! ,name ,args
+       ,docstring
+       `(let ,(mapcar #'list (list ,@gs) (list ,@os))
+          ,(progn ,@body)))))
+
+
+(defmacro! dlambda (&rest ds)
+  `(lambda (&rest ,g!args)
+     (case (car ,g!args)
+       ,@(mapcar
+          (lambda (d)
+            `(,(if (eq t (car d))
+                   t
+                   (list (car d)))
+               (apply (lambda ,@(cdr d))
+                      ,(if (eq t (car d))
+                           g!args
+                           `(cdr ,g!args)))))
+          ds))))

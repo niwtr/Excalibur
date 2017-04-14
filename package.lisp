@@ -41,6 +41,7 @@
            #:transpose
            #:filter
            #:group
+           #:dlambda
            ))
 ;;EOF
 
